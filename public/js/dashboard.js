@@ -9,12 +9,215 @@ let userInfo = null;
 let currentPage = 1;
 let isLoading = false;
 let hasMorePosts = true;
-let currentFilters = {};
+const DEFAULT_FORUM = 'all';
+let currentFilters = {
+    forumSelection: DEFAULT_FORUM
+};
+
+const FORUM_CONFIG = {
+    'nodeseek': {
+        label: 'NodeSeek',
+        domain: 'www.nodeseek.com',
+        categories: {
+            'daily': { icon: '📅', label: '日常' },
+            'tech': { icon: '💻', label: '技术' },
+            'info': { icon: 'ℹ️', label: '情报' },
+            'review': { icon: '⭐', label: '测评' },
+            'trade': { icon: '💰', label: '交易' },
+            'carpool': { icon: '🚗', label: '拼车' },
+            'promotion': { icon: '📢', label: '推广' },
+            'life': { icon: '🏠', label: '生活' },
+            'dev': { icon: '⚡', label: 'Dev' },
+            'photo': { icon: '📷', label: '贴图' },
+            'expose': { icon: '🚨', label: '曝光' },
+            'sandbox': { icon: '🏖️', label: '沙盒' }
+        }
+    },
+    'deepflood': {
+        label: 'DeepFlood',
+        domain: 'www.deepflood.com',
+        categories: {
+            'ai': { icon: '🤖', label: '人工智能' },
+            'daily': { icon: '☕', label: '摸鱼闲聊' },
+            'emotion': { icon: '💞', label: '情感八卦' },
+            'stream': { icon: '🎬', label: '影音图文' },
+            'sports': { icon: '🏅', label: '运动赛事' },
+            'game': { icon: '🎮', label: '游戏同好' },
+            'coupon': { icon: '🎁', label: '羊毛福利' },
+            'promotion': { icon: '📣', label: '服务推广' },
+            'financial': { icon: '📈', label: '投资理财' },
+            'device': { icon: '📱', label: '电子设备' },
+            'feedback': { icon: '🛠️', label: '运营反馈' },
+            'inside': { icon: '🔒', label: '内部版块' },
+            'sandbox': { icon: '🏖️', label: '沙盒测试' }
+        }
+    }
+};
+
+const FORUM_ORDER = ['nodeseek', 'deepflood'];
+
+const DOMAIN_TO_FORUM = {
+    'www.nodeseek.com': 'nodeseek',
+    'www.deepflood.com': 'deepflood'
+};
+
+function getForumLabel(forum) {
+    if (forum === 'all' || !forum) {
+        return '全部';
+    }
+    return FORUM_CONFIG[forum]?.label || forum;
+}
+
+function getForumByDomain(domain) {
+    return DOMAIN_TO_FORUM[domain] || null;
+}
+
+function getCategoryConfig(category, forum) {
+    if (forum && FORUM_CONFIG[forum]?.categories?.[category]) {
+        return { ...FORUM_CONFIG[forum].categories[category], forum };
+    }
+
+    for (const forumKey of FORUM_ORDER) {
+        const categoryConfig = FORUM_CONFIG[forumKey]?.categories?.[category];
+        if (categoryConfig) {
+            return { ...categoryConfig, forum: forumKey };
+        }
+    }
+
+    return null;
+}
+
+function getCategoryLabel(category, contextForum, { includeForum = false } = {}) {
+    if (!category) {
+        return '';
+    }
+
+    const matchedConfig = getCategoryConfig(category, contextForum);
+
+    if (matchedConfig) {
+        const { icon, label, forum } = matchedConfig;
+        if (includeForum) {
+            return `${icon} ${getForumLabel(forum)} · ${label}`;
+        }
+        return `${icon} ${label}`;
+    }
+
+    const matchedConfigs = FORUM_ORDER.map(forum => {
+        const config = FORUM_CONFIG[forum]?.categories?.[category];
+        return config ? { ...config, forum } : null;
+    }).filter(Boolean);
+
+    if (matchedConfigs.length === 0) {
+        return category;
+    }
+
+    const icon = matchedConfigs[0].icon;
+    const labels = matchedConfigs.map(item => `${getForumLabel(item.forum)} · ${item.label}`);
+    return `${icon} ${labels.join(' / ')}`;
+}
+
+function buildCategoryOptions(forum) {
+    const options = [];
+    options.push({ value: '', label: '全部分类' });
+
+    if (forum === 'all') {
+        FORUM_ORDER.forEach(forumKey => {
+            const categories = FORUM_CONFIG[forumKey]?.categories || {};
+            Object.entries(categories).forEach(([categoryKey, meta]) => {
+                options.push({
+                    value: `${forumKey}::${categoryKey}`,
+                    label: `${meta.icon} ${FORUM_CONFIG[forumKey].label} · ${meta.label}`
+                });
+            });
+        });
+        return options;
+    }
+
+    const categories = FORUM_CONFIG[forum]?.categories || {};
+    Object.entries(categories).forEach(([categoryKey, meta]) => {
+        options.push({
+            value: categoryKey,
+            label: `${meta.icon} ${meta.label}`
+        });
+    });
+    return options;
+}
+
+function populateCategorySelect(selectElement, forum, preservedValue = '') {
+    if (!selectElement) return;
+    const options = buildCategoryOptions(forum);
+    const optionsHtml = options
+        .map(option => `<option value="${option.value}">${option.label}</option>`)
+        .join('');
+    selectElement.innerHTML = optionsHtml;
+
+    if (preservedValue && options.some(option => option.value === preservedValue)) {
+        selectElement.value = preservedValue;
+    } else {
+        selectElement.value = '';
+    }
+}
+
+function parseCategorySelection(value, fallbackForum = DEFAULT_FORUM) {
+    if (!value) {
+        return { forum: fallbackForum, category: '' };
+    }
+
+    if (value.includes('::')) {
+        const [forum, category] = value.split('::');
+        return { forum: forum || fallbackForum, category: category || '' };
+    }
+
+    return { forum: fallbackForum, category: value };
+}
+
+function setupForumCategoryControls() {
+    const filterForumSelect = document.getElementById('filterForum');
+    const filterCategorySelect = document.getElementById('filterCategory');
+    const subForumSelect = document.getElementById('subForum');
+    const subCategorySelect = document.getElementById('subCategory');
+
+    if (filterForumSelect && filterCategorySelect) {
+        populateCategorySelect(filterCategorySelect, DEFAULT_FORUM);
+        filterForumSelect.value = DEFAULT_FORUM;
+    }
+
+    if (subForumSelect && subCategorySelect) {
+        populateCategorySelect(subCategorySelect, DEFAULT_FORUM);
+        subForumSelect.value = DEFAULT_FORUM;
+    }
+}
+
+const CATEGORY_CONFIG = {
+    'ai': { icon: '🤖', label: '人工智能' },
+    'daily': { icon: '📅', label: '日常 / 摸鱼闲聊' },
+    'emotion': { icon: '💞', label: '情感八卦' },
+    'stream': { icon: '🎬', label: '影音图文' },
+    'sports': { icon: '🏅', label: '运动赛事' },
+    'game': { icon: '🎮', label: '游戏同好' },
+    'coupon': { icon: '🎁', label: '羊毛福利' },
+    'promotion': { icon: '📢', label: '推广 / 服务推广' },
+    'financial': { icon: '📈', label: '投资理财' },
+    'device': { icon: '📱', label: '电子设备' },
+    'feedback': { icon: '🛠️', label: '运营反馈' },
+    'inside': { icon: '🔒', label: '内部版块' },
+    'sandbox': { icon: '🏖️', label: '沙盒 / 沙盒测试' },
+    'tech': { icon: '💻', label: '技术' },
+    'info': { icon: 'ℹ️', label: '情报' },
+    'review': { icon: '⭐', label: '测评' },
+    'trade': { icon: '💰', label: '交易' },
+    'carpool': { icon: '🚗', label: '拼车' },
+    'life': { icon: '🏠', label: '生活' },
+    'dev': { icon: '⚡', label: 'Dev' },
+    'photo': { icon: '📷', label: '贴图' },
+    'expose': { icon: '🚨', label: '曝光' }
+};
 
 document.addEventListener('DOMContentLoaded', function() {
     // 检查认证状态
+    setupForumCategoryControls();
     checkAuth();
-    
+
     // 初始化事件监听器
     initEventListeners();
     
@@ -121,13 +324,31 @@ function initEventListeners() {
     
     // 订阅管理
     document.getElementById('addSubForm').addEventListener('submit', handleAddSubscription);
-    
+
+    const subForumSelect = document.getElementById('subForum');
+    if (subForumSelect) {
+        subForumSelect.addEventListener('change', function() {
+            const newForum = this.value || DEFAULT_FORUM;
+            const categorySelect = document.getElementById('subCategory');
+            populateCategorySelect(categorySelect, newForum);
+        });
+    }
+
     // 文章管理
     document.getElementById('refreshPostsBtn').addEventListener('click', () => loadPosts(true));
     document.getElementById('updateRssBtn').addEventListener('click', updateRSS);
     document.getElementById('cleanupPostsBtn').addEventListener('click', cleanupOldPosts);
-    
+
     // 筛选功能
+    const filterForumSelect = document.getElementById('filterForum');
+    if (filterForumSelect) {
+        filterForumSelect.addEventListener('change', function() {
+            const newForum = this.value || DEFAULT_FORUM;
+            const categorySelect = document.getElementById('filterCategory');
+            populateCategorySelect(categorySelect, newForum);
+        });
+    }
+
     document.getElementById('applyFiltersBtn').addEventListener('click', applyFilters);
     
     // 加载更多
@@ -576,7 +797,7 @@ async function loadSubscriptions() {
 // 渲染订阅列表
 function renderSubscriptions(subscriptions) {
     const container = document.getElementById('subscriptionsList');
-    
+
     if (subscriptions.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -586,27 +807,14 @@ function renderSubscriptions(subscriptions) {
         `;
         return;
     }
-    
-    // 分类映射表
-    const categoryMap = {
-        'daily': '📅 日常',
-        'tech': '💻 技术',
-        'info': 'ℹ️ 情报',
-        'review': '⭐ 测评',
-        'trade': '💰 交易',
-        'carpool': '🚗 拼车',
-        'promotion': '📢 推广',
-        'life': '🏠 生活',
-        'dev': '⚡ Dev',
-        'photo': '📷 贴图',
-        'expose': '🚨 曝光',
-        'sandbox': '🏖️ 沙盒'
-    };
-    
+
     container.innerHTML = subscriptions.map(sub => {
         const keywords = [sub.keyword1, sub.keyword2, sub.keyword3].filter(k => k);
         const hasKeywords = keywords.length > 0;
-        
+        const forumKey = sub.forum || 'all';
+        const forumLabel = getForumLabel(forumKey);
+        const categoryDisplay = sub.category ? getCategoryLabel(sub.category, forumKey, { includeForum: forumKey === 'all' }) : '';
+
         return `
             <div class="subscription-item">
                 <div class="subscription-header">
@@ -621,8 +829,9 @@ function renderSubscriptions(subscriptions) {
                     </div>
                 ` : ''}
                 <div class="filters">
+                    <span>🌐 论坛: ${forumLabel}</span>
                     ${sub.creator ? `<span>👤 创建者: ${sub.creator}</span>` : ''}
-                    ${sub.category ? `<span>📂 分类: ${categoryMap[sub.category] || sub.category}</span>` : ''}
+                    ${categoryDisplay ? `<span>📂 分类: ${categoryDisplay}</span>` : ''}
                     ${!hasKeywords && !sub.creator && !sub.category ? '<span style="color: #999;">无筛选条件</span>' : ''}
                 </div>
             </div>
@@ -635,12 +844,19 @@ async function handleAddSubscription(e) {
     e.preventDefault();
     
     const formData = new FormData(e.target);
+    const forumSelection = formData.get('forum') || DEFAULT_FORUM;
+    const categorySelection = formData.get('category') || '';
+    const parsedCategory = parseCategorySelection(categorySelection, forumSelection || DEFAULT_FORUM);
+    const normalizedForum = (categorySelection ? parsedCategory.forum : (forumSelection || DEFAULT_FORUM)) || DEFAULT_FORUM;
+    const normalizedCategory = parsedCategory.category || '';
+
     const data = {
         keyword1: formData.get('keyword1')?.trim() || '',
         keyword2: formData.get('keyword2')?.trim() || '',
         keyword3: formData.get('keyword3')?.trim() || '',
         creator: formData.get('creator')?.trim() || '',
-        category: formData.get('category') || ''
+        category: normalizedCategory,
+        forum: normalizedForum
     };
 
     // 验证：至少需要一个关键词或者选择了创建者/分类
@@ -654,10 +870,16 @@ async function handleAddSubscription(e) {
 
     try {
         const response = await apiRequest('/api/subscriptions', 'POST', data);
-        
+
         if (response.success) {
             showMessage('订阅添加成功', 'success');
             e.target.reset();
+            const subForumSelect = document.getElementById('subForum');
+            const subCategorySelect = document.getElementById('subCategory');
+            if (subForumSelect && subCategorySelect) {
+                subForumSelect.value = DEFAULT_FORUM;
+                populateCategorySelect(subCategorySelect, DEFAULT_FORUM);
+            }
             loadSubscriptions();
             updateStatus(); // 更新状态
         } else {
@@ -716,6 +938,7 @@ async function loadPosts(reset = true) {
         
         // 添加筛选参数
         if (currentFilters.category) params.append('category', currentFilters.category);
+        if (currentFilters.forum) params.append('forum', currentFilters.forum);
         if (currentFilters.pushStatus !== undefined && currentFilters.pushStatus !== '') {
             params.append('push_status', currentFilters.pushStatus);
         }
@@ -789,18 +1012,23 @@ function renderPosts(posts, reset = true) {
                 pushStatusColor = '#9e9e9e';
                 break;
         }
-        
+
+        const domain = post.source_domain || 'www.nodeseek.com';
+        const forumKey = getForumByDomain(domain);
+        const postUrl = `https://${domain}/post-${post.post_id}-1`;
+        const categoryDisplay = post.category ? getCategoryLabel(post.category, forumKey) : '';
+
         return `
             <div class="post-item">
                 <h4>
-                    <a href="https://www.nodeseek.com/post-${post.post_id}-1" target="_blank" rel="noopener noreferrer">
+                    <a href="${postUrl}" target="_blank" rel="noopener noreferrer">
                         ${post.title}
                     </a>
                 </h4>
                 <div class="meta">
                     <span>📅 ${new Date(post.pub_date).toLocaleString()}</span>
                     ${post.creator ? `<span>👤 ${post.creator}</span>` : ''}
-                    ${post.category ? `<span>📂 ${getCategoryName(post.category)}</span>` : ''}
+                    ${categoryDisplay ? `<span>📂 ${categoryDisplay}</span>` : ''}
                     <span style="color: ${pushStatusColor}; font-weight: 500;">${pushStatusText}</span>
                 </div>
                 ${post.memo ? `
@@ -815,25 +1043,6 @@ function renderPosts(posts, reset = true) {
     container.insertAdjacentHTML('beforeend', postsHtml);
 }
 
-// 获取分类显示名称
-function getCategoryName(category) {
-    const categoryMap = {
-        'daily': '📅 日常',
-        'tech': '💻 技术',
-        'info': 'ℹ️ 情报',
-        'review': '⭐ 测评',
-        'trade': '💰 交易',
-        'carpool': '🚗 拼车',
-        'promotion': '📢 推广',
-        'life': '🏠 生活',
-        'dev': '⚡ Dev',
-        'photo': '📷 贴图',
-        'expose': '🚨 曝光',
-        'sandbox': '🏖️ 沙盒'
-    };
-    return categoryMap[category] || category;
-}
-
 // 更新文章信息显示
 function updatePostsInfo(pagination) {
     const infoDiv = document.getElementById('postsInfo');
@@ -842,14 +1051,30 @@ function updatePostsInfo(pagination) {
     if (pagination.total > 0) {
         let filterText = '';
         const activeFilters = [];
-        
+
+        const forumForDisplay = currentFilters.forum
+            ? currentFilters.forum
+            : (currentFilters.forumSelection && currentFilters.forumSelection !== 'all' ? currentFilters.forumSelection : null);
+
+        if (forumForDisplay) {
+            activeFilters.push(`论坛: ${getForumLabel(forumForDisplay)}`);
+        }
+
         if (currentFilters.category) {
-            activeFilters.push(`分类: ${getCategoryName(currentFilters.category)}`);
+            const categoryForum = currentFilters.categoryForum
+                || currentFilters.forum
+                || (currentFilters.forumSelection && currentFilters.forumSelection !== 'all' ? currentFilters.forumSelection : undefined);
+            const categoryDisplay = getCategoryLabel(
+                currentFilters.category,
+                categoryForum,
+                { includeForum: !categoryForum || categoryForum === 'all' }
+            );
+            activeFilters.push(`分类: ${categoryDisplay}`);
         }
         if (currentFilters.pushStatus !== undefined && currentFilters.pushStatus !== '') {
             const statusMap = {
                 '0': '未推送',
-                '1': '已推送', 
+                '1': '已推送',
                 '2': '无需推送'
             };
             activeFilters.push(`推送状态: ${statusMap[currentFilters.pushStatus]}`);
@@ -887,16 +1112,39 @@ function updateLoadMoreButton() {
 
 // 应用筛选条件
 function applyFilters() {
-    const category = document.getElementById('filterCategory').value;
+    const forumSelection = document.getElementById('filterForum').value || DEFAULT_FORUM;
+    const categorySelection = document.getElementById('filterCategory').value;
     const pushStatus = document.getElementById('filterPushStatus').value;
     const creator = document.getElementById('filterCreator').value.trim();
-    
+
+    let normalizedForum = forumSelection || DEFAULT_FORUM;
+    let normalizedCategory = '';
+
+    if (categorySelection) {
+        const parsedCategory = parseCategorySelection(categorySelection, normalizedForum);
+        normalizedForum = parsedCategory.forum || normalizedForum;
+        normalizedCategory = parsedCategory.category || '';
+    }
+
     currentFilters = {
-        category: category || undefined,
+        forumSelection: forumSelection || DEFAULT_FORUM,
+        categorySelection: categorySelection || '',
+        category: normalizedCategory || undefined,
         pushStatus: pushStatus || undefined,
-        creator: creator || undefined
+        creator: creator || undefined,
+        forum: undefined,
+        categoryForum: undefined
     };
-    
+
+    if (normalizedForum && normalizedForum !== 'all') {
+        currentFilters.forum = normalizedForum;
+    }
+
+    if (normalizedCategory) {
+        currentFilters.category = normalizedCategory;
+        currentFilters.categoryForum = normalizedForum !== 'all' ? normalizedForum : undefined;
+    }
+
     // 重置分页并重新加载
     loadPosts(true);
 }

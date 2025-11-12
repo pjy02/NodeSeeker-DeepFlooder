@@ -9,6 +9,8 @@ export interface RSSItem {
   contentSnippet: string;
   content: string;
   guid: string;
+  source: string;
+  source_domain: string;
 }
 
 export interface ParsedPost {
@@ -18,12 +20,46 @@ export interface ParsedPost {
   category: string;
   creator: string;
   pub_date: string;
+  source_domain: string;
+}
+
+interface RSSSource {
+  name: string;
+  url: string;
+  referer?: string;
+  domain: string;
 }
 
 export class RSSService {
-  private readonly RSS_URL = 'https://rss.nodeseek.com/';
+  private readonly RSS_SOURCES: RSSSource[] = [
+    {
+      name: 'NodeSeek',
+      url: 'https://rss.nodeseek.com/',
+      referer: 'https://www.nodeseek.com/',
+      domain: 'www.nodeseek.com'
+    },
+    {
+      name: 'DeepFlood',
+      url: 'https://feed.deepflood.com/topic.rss.xml',
+      referer: 'https://www.deepflood.com/',
+      domain: 'www.deepflood.com'
+    }
+  ];
 
   constructor(private dbService: DatabaseService) {}
+
+  private buildRequestHeaders(referer?: string): HeadersInit {
+    return {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+      'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      ...(referer ? { Referer: referer } : {}),
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache'
+    };
+  }
 
   /**
    * 从 XML 文本中提取标签内容
@@ -45,7 +81,7 @@ export class RSSService {
   /**
    * 解析 RSS XML 数据
    */
-  private parseRSSXML(xmlText: string): RSSItem[] {
+  private parseRSSXML(xmlText: string, source: RSSSource): RSSItem[] {
     try {
       // 提取所有 <item> 元素
       const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
@@ -79,7 +115,9 @@ export class RSSService {
           category,
           contentSnippet,
           content,
-          guid
+          guid,
+          source: source.name,
+          source_domain: source.domain
         });
       }
 
@@ -94,39 +132,50 @@ export class RSSService {
    * 抓取并解析 RSS 数据
    */
   async fetchAndParseRSS(): Promise<RSSItem[]> {
-    try {
-      console.log('开始抓取 RSS 数据...');
-      
-      const response = await fetch(this.RSS_URL, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Referer': 'https://www.nodeseek.com/',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+    const allItems: RSSItem[] = [];
+    const errors: string[] = [];
+    let successSources = 0;
+
+    for (const source of this.RSS_SOURCES) {
+      try {
+        console.log(`开始抓取 ${source.name} RSS 数据...`);
+
+        const response = await fetch(source.url, {
+          headers: this.buildRequestHeaders(source.referer)
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-      })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        const xmlText = await response.text();
+        const items = this.parseRSSXML(xmlText, source);
+        successSources++;
+
+        if (!items || items.length === 0) {
+          console.log(`${source.name} RSS 数据为空`);
+          continue;
+        }
+
+        console.log(`成功抓取到 ${items.length} 条来自 ${source.name} 的 RSS 数据`);
+        allItems.push(...items);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`${source.name} RSS 抓取失败:`, error);
+        errors.push(`${source.name}: ${message}`);
       }
-
-      const xmlText = await response.text();
-      const items = this.parseRSSXML(xmlText);
-      
-      if (!items || items.length === 0) {
-        console.log('RSS 数据为空');
-        return [];
-      }
-
-      console.log(`成功抓取到 ${items.length} 条 RSS 数据`);
-      return items;
-    } catch (error) {
-      console.error('RSS 抓取失败:', error);
-      throw new Error(`RSS 抓取失败: ${error}`);
     }
+
+    if (successSources === 0) {
+      throw new Error(`RSS 抓取失败: ${errors.join('；')}`);
+    }
+
+    if (errors.length > 0) {
+      console.warn(`部分 RSS 源抓取失败: ${errors.join('；')}`);
+    }
+
+    console.log(`共收集到 ${allItems.length} 条 RSS 数据`);
+    return allItems;
   }
 
   /**
@@ -198,8 +247,19 @@ export class RSSService {
       memo,
       category,
       creator,
-      pub_date: pubDate
+      pub_date: pubDate,
+      source_domain: item.source_domain || this.extractDomainFromLink(item.link)
     };
+  }
+
+  private extractDomainFromLink(link: string): string {
+    try {
+      const url = new URL(link);
+      return url.hostname || 'www.nodeseek.com';
+    } catch (error) {
+      console.warn('无法从链接解析域名，使用默认值:', link, error);
+      return 'www.nodeseek.com';
+    }
   }
 
   /**
@@ -240,6 +300,27 @@ export class RSSService {
       const existingPosts = await this.dbService.getPostsByPostIds(postIds);
       console.log(`批量查询完成: 找到 ${existingPosts.size} 个已存在的文章`);
 
+      // 更新已存在文章的域名信息，防止旧数据仍指向 NodeSeek
+      const domainUpdates: Array<{ postId: number; sourceDomain: string }> = [];
+      for (const parsedPost of parsedPosts) {
+        const existingPost = existingPosts.get(parsedPost.post_id);
+        if (!existingPost) continue;
+
+        const parsedDomain = parsedPost.source_domain || 'www.nodeseek.com';
+        if (existingPost.source_domain !== parsedDomain) {
+          domainUpdates.push({
+            postId: parsedPost.post_id,
+            sourceDomain: parsedDomain
+          });
+          existingPost.source_domain = parsedDomain;
+        }
+      }
+
+      if (domainUpdates.length > 0) {
+        await this.dbService.batchUpdatePostSourceDomain(domainUpdates);
+        console.log(`已修正 ${domainUpdates.length} 篇文章的域名指向`);
+      }
+
       // 第三步：筛选出需要创建的新文章
       const newPostsToCreate = parsedPosts.filter(parsedPost => {
         if (existingPosts.has(parsedPost.post_id)) {
@@ -254,7 +335,8 @@ export class RSSService {
         try {
           const postsWithDefaults = newPostsToCreate.map(post => ({
             ...post,
-            push_status: 0 // 默认未推送
+            push_status: 0, // 默认未推送
+            source_domain: post.source_domain || 'www.nodeseek.com'
           }));
 
           const createdCount = await this.dbService.batchCreatePosts(postsWithDefaults);
@@ -318,30 +400,34 @@ export class RSSService {
    * 验证 RSS 源是否可访问
    */
   async validateRSSSource(): Promise<{ accessible: boolean; message: string }> {
-    try {
-      const response = await fetch(this.RSS_URL, {
-        method: 'HEAD',
-        headers: {
-          'User-Agent': 'NodeSeeker RSS Bot 1.0'
-        }
-      });
+    const results = await Promise.all(
+      this.RSS_SOURCES.map(async source => {
+        try {
+          const response = await fetch(source.url, {
+            method: 'HEAD',
+            headers: {
+              'User-Agent': 'NodeSeeker RSS Bot 1.0',
+              ...(source.referer ? { Referer: source.referer } : {})
+            }
+          });
 
-      if (response.ok) {
-        return {
-          accessible: true,
-          message: 'RSS 源可正常访问'
-        };
-      } else {
-        return {
-          accessible: false,
-          message: `RSS 源访问失败: HTTP ${response.status}`
-        };
-      }
-    } catch (error) {
-      return {
-        accessible: false,
-        message: `RSS 源访问失败: ${error}`
-      };
-    }
+          if (response.ok) {
+            return `${source.name}: 可正常访问`;
+          }
+
+          return `${source.name}: HTTP ${response.status}`;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return `${source.name}: ${message}`;
+        }
+      })
+    );
+
+    const accessible = results.some(result => result.includes('可正常访问'));
+
+    return {
+      accessible,
+      message: results.join('；')
+    };
   }
 }

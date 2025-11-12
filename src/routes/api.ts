@@ -518,8 +518,9 @@ apiRoutes.get('/subscriptions', async (c) => {
 apiRoutes.post('/subscriptions', async (c) => {
   try {
     const body = await c.req.json()
-    const { keyword1, keyword2, keyword3, creator, category } = body
-    
+    const { keyword1, keyword2, keyword3, creator, category, forum } = body
+    const normalizedForum = ['nodeseek', 'deepflood', 'all'].includes(forum) ? forum : 'all'
+
     // 检查是否至少有一个关键词或者有创建者/分类
     const hasKeywords = (keyword1 && keyword1.trim()) || (keyword2 && keyword2.trim()) || (keyword3 && keyword3.trim())
     const hasCreatorOrCategory = (creator && creator.trim()) || (category && category.trim())
@@ -537,7 +538,8 @@ apiRoutes.post('/subscriptions', async (c) => {
       keyword2: keyword2 && keyword2.trim() ? keyword2.trim() : null,
       keyword3: keyword3 && keyword3.trim() ? keyword3.trim() : null,
       creator: creator && creator.trim() ? creator.trim() : null,
-      category: category && category.trim() ? category.trim() : null
+      category: category && category.trim() ? category.trim() : null,
+      forum: normalizedForum
     })
     
     return c.json({
@@ -565,15 +567,19 @@ apiRoutes.put('/subscriptions/:id', async (c) => {
     }
     
     const body = await c.req.json()
-    const { keyword1, keyword2, keyword3, creator, category } = body
-    
+    const { keyword1, keyword2, keyword3, creator, category, forum } = body
+    const normalizedForum = forum !== undefined
+      ? (['nodeseek', 'deepflood', 'all'].includes(forum) ? forum : 'all')
+      : undefined
+
     const dbService = c.get('dbService')
     const subscription = await dbService.updateKeywordSub(id, {
       keyword1: keyword1 ? keyword1.trim() : undefined,
       keyword2: keyword2 ? keyword2.trim() : undefined,
       keyword3: keyword3 ? keyword3.trim() : undefined,
       creator: creator ? creator.trim() : undefined,
-      category: category ? category.trim() : undefined
+      category: category ? category.trim() : undefined,
+      forum: normalizedForum
     })
     
     if (!subscription) {
@@ -639,6 +645,7 @@ apiRoutes.get('/posts', async (c) => {
     const category = c.req.query('category')
     const startDate = c.req.query('start_date')
     const endDate = c.req.query('end_date')
+    const forum = c.req.query('forum')
     
     const dbService = c.get('dbService')
     
@@ -649,6 +656,9 @@ apiRoutes.get('/posts', async (c) => {
     }
     if (creator) filters.creator = creator
     if (category) filters.category = category
+    if (forum && ['nodeseek', 'deepflood'].includes(forum)) {
+      filters.forum = forum
+    }
     if (startDate) filters.startDate = startDate
     if (endDate) filters.endDate = endDate
     

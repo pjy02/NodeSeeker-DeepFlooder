@@ -573,21 +573,17 @@ export const DashboardPage: FC = () => {
                     <input type="text" id="creator" name="creator" placeholder="用户名" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
                   </div>
                   <div>
-                    <label for="category" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">分类</label>
-                    <select id="category" name="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                      <option value="">全部</option>
-                      <option value="daily">📅 日常</option>
-                      <option value="tech">💻 技术</option>
-                      <option value="info">ℹ️ 情报</option>
-                      <option value="review">⭐ 测评</option>
-                      <option value="trade">💰 交易</option>
-                      <option value="carpool">🚗 拼车</option>
-                      <option value="promotion">📢 推广</option>
-                      <option value="life">🏠 生活</option>
-                      <option value="dev">⚡ Dev</option>
-                      <option value="photo">📷 贴图</option>
-                      <option value="expose">🚨 曝光</option>
-                      <option value="sandbox">🏖️ 沙盒</option>
+                    <label for="subForum" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">论坛</label>
+                    <select id="subForum" name="forum" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                      <option value="all">全部论坛</option>
+                      <option value="nodeseek">NodeSeek</option>
+                      <option value="deepflood">DeepFlood</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label for="subCategory" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">分类</label>
+                    <select id="subCategory" name="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                      <option value="">全部分类</option>
                     </select>
                   </div>
                 </div>
@@ -625,21 +621,17 @@ export const DashboardPage: FC = () => {
                 <h3 style="font-size: 16px; margin-bottom: 16px; color: #333;">🔍 筛选条件</h3>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;" class="filter-grid">
                   <div>
+                    <label for="filterForum" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">论坛</label>
+                    <select id="filterForum" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                      <option value="all">全部论坛</option>
+                      <option value="nodeseek">NodeSeek</option>
+                      <option value="deepflood">DeepFlood</option>
+                    </select>
+                  </div>
+                  <div>
                     <label for="filterCategory" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">分类</label>
                     <select id="filterCategory" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
                       <option value="">全部分类</option>
-                      <option value="daily">📅 日常</option>
-                      <option value="tech">💻 技术</option>
-                      <option value="info">ℹ️ 情报</option>
-                      <option value="review">⭐ 测评</option>
-                      <option value="trade">💰 交易</option>
-                      <option value="carpool">🚗 拼车</option>
-                      <option value="promotion">📢 推广</option>
-                      <option value="life">🏠 生活</option>
-                      <option value="dev">⚡ Dev</option>
-                      <option value="photo">📷 贴图</option>
-                      <option value="expose">🚨 曝光</option>
-                      <option value="sandbox">🏖️ 沙盒</option>
                     </select>
                   </div>
                   

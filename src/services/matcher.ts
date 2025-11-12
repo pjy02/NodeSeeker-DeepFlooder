@@ -87,6 +87,23 @@ export class MatcherService {
     const keywords = [subscription.keyword1, subscription.keyword2, subscription.keyword3]
       .filter(k => k && k.trim().length > 0);
 
+    if (subscription.forum && subscription.forum !== 'all') {
+      const targetDomain = subscription.forum === 'deepflood' ? 'www.deepflood.com' : 'www.nodeseek.com';
+      if ((post.source_domain || 'www.nodeseek.com') !== targetDomain) {
+        return {
+          matched: false,
+          matchedKeywords: [],
+          matchType: 'title',
+          matchDetails: {
+            titleMatches: [],
+            contentMatches: [],
+            authorMatches: [],
+            categoryMatches: []
+          }
+        };
+      }
+    }
+
     if (keywords.length === 0 && !subscription.creator && !subscription.category) {
       return {
         matched: false,
