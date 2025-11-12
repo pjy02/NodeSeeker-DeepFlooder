@@ -92,6 +92,35 @@ export const DashboardPage: FC = () => {
           padding: 40px 20px;
           color: #999;
         }
+        .stats-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+        .forum-stats-row {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .forum-stats-header {
+          font-size: 16px;
+          font-weight: 600;
+          color: #333;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .forum-stats-cards {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          gap: 16px;
+        }
+        .stats-empty {
+          text-align: center;
+          padding: 60px 20px;
+          color: #999;
+        }
+
         .stat-card {
           background: white;
           padding: 24px;
@@ -234,7 +263,6 @@ export const DashboardPage: FC = () => {
           }
           
           .stats-grid {
-            grid-template-columns: 1fr 1fr !important;
             gap: 16px !important;
           }
         }
@@ -319,13 +347,22 @@ export const DashboardPage: FC = () => {
              padding: 4px 8px !important;
            }
            
-           .stats-grid {
-             gap: 12px !important;
-           }
-           
-           .stat-card {
-             padding: 16px !important;
-           }
+          .stats-grid {
+            gap: 16px !important;
+          }
+
+          .forum-stats-header {
+            font-size: 14px !important;
+          }
+
+          .forum-stats-cards {
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)) !important;
+            gap: 12px !important;
+          }
+
+          .stat-card {
+            padding: 16px !important;
+          }
            
            .stat-card h3 {
              font-size: 12px !important;
@@ -344,7 +381,7 @@ export const DashboardPage: FC = () => {
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);" class="page-header">
             <div>
               <h1 style="font-size: 28px; font-weight: bold; color: #333; margin-bottom: 8px;">
-                📡 NodeSeek RSS 监控控制台
+                📡 NodeSeek&DeepFlood RSS 监控控制台
               </h1>
               <p style="color: #666; font-size: 16px;">
                 智能文章监控与推送系统
@@ -555,36 +592,40 @@ export const DashboardPage: FC = () => {
                 <p style="font-size: 14px; color: #666; margin-bottom: 16px;">
                   💡 提示：至少需要填写一个关键词，或者选择创建者/分类进行监控
                 </p>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;" class="form-grid">
-                  <div>
-                    <label for="keyword1" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">关键词1</label>
-                    <input type="text" id="keyword1" name="keyword1" placeholder="输入关键词" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                <div style="display: flex; flex-direction: column; gap: 16px;" class="form-grid">
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;" class="form-row">
+                    <div>
+                      <label for="subForum" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">论坛</label>
+                      <select id="subForum" name="forum" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                        <option value="all">全部论坛</option>
+                        <option value="nodeseek">NodeSeek</option>
+                        <option value="deepflood">DeepFlood</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label for="creator" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">创建者</label>
+                      <input type="text" id="creator" name="creator" placeholder="用户名" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                    </div>
+                    <div>
+                      <label for="subCategory" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">分类</label>
+                      <select id="subCategory" name="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
+                        <option value="">全部分类</option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <label for="keyword2" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">关键词2</label>
-                    <input type="text" id="keyword2" name="keyword2" placeholder="输入关键词" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-                  </div>
-                  <div>
-                    <label for="keyword3" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">关键词3</label>
-                    <input type="text" id="keyword3" name="keyword3" placeholder="输入关键词" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-                  </div>
-                  <div>
-                    <label for="creator" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">创建者</label>
-                    <input type="text" id="creator" name="creator" placeholder="用户名" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
-                  </div>
-                  <div>
-                    <label for="subForum" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">论坛</label>
-                    <select id="subForum" name="forum" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                      <option value="all">全部论坛</option>
-                      <option value="nodeseek">NodeSeek</option>
-                      <option value="deepflood">DeepFlood</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label for="subCategory" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">分类</label>
-                    <select id="subCategory" name="category" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: white;">
-                      <option value="">全部分类</option>
-                    </select>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;" class="form-row">
+                    <div>
+                      <label for="keyword1" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">关键词1</label>
+                      <input type="text" id="keyword1" name="keyword1" placeholder="输入关键词" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                    </div>
+                    <div>
+                      <label for="keyword2" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">关键词2</label>
+                      <input type="text" id="keyword2" name="keyword2" placeholder="输入关键词" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                    </div>
+                    <div>
+                      <label for="keyword3" style="display: block; margin-bottom: 6px; font-weight: 500; color: #333;">关键词3</label>
+                      <input type="text" id="keyword3" name="keyword3" placeholder="输入关键词" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                    </div>
                   </div>
                 </div>
                 <button type="submit" style="margin-top: 16px; padding: 8px 16px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer;">
@@ -687,8 +728,8 @@ export const DashboardPage: FC = () => {
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;" class="section-header">
                 <h2 style="font-size: 20px; color: #333; margin: 0;">📊 统计信息</h2>
               </div>
-              <div id="statsContent" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; min-height: 300px;" class="stats-grid">
-                <div style="text-align: center; padding: 60px 20px; color: #999; grid-column: 1 / -1;">
+              <div id="statsContent" style="display: flex; flex-direction: column; gap: 20px; min-height: 300px;" class="stats-grid">
+                <div class="stats-empty">
                   加载中...
                 </div>
               </div>

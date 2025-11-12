@@ -27,6 +27,13 @@ export interface Post {
   source_domain: string;
 }
 
+export type ForumKey = 'nodeseek' | 'deepflood';
+
+const FORUM_DOMAINS: Record<ForumKey, string> = {
+  nodeseek: 'www.nodeseek.com',
+  deepflood: 'www.deepflood.com'
+};
+
 export interface KeywordSub {
   id?: number;
   keyword1?: string;
@@ -49,6 +56,14 @@ export class DatabaseService {
 
   constructor(private db: D1Database) {
     this.queryCache = new Map();
+  }
+
+  private getForumDomain(forum: ForumKey): string {
+    return FORUM_DOMAINS[forum];
+  }
+
+  private getForumCacheKey(method: string, forum: ForumKey): string {
+    return this.getCacheKey(`ForumStats:${method}`, [forum]);
   }
 
   private async ensurePostsTableSchema(): Promise<void> {
@@ -519,10 +534,13 @@ export class DatabaseService {
 
   async updatePostPushStatus(postId: number, pushStatus: number, subId?: number, pushDate?: string): Promise<void> {
     await this.db.prepare(`
-      UPDATE posts 
+      UPDATE posts
       SET push_status = ?, sub_id = ?, push_date = ?
       WHERE post_id = ?
     `).bind(pushStatus, subId || null, pushDate || null, postId).run();
+
+    this.clearCacheByPattern('posts');
+    this.clearCacheByPattern('Stats');
   }
 
   async getRecentPosts(limit: number = 10): Promise<Post[]> {
@@ -650,6 +668,7 @@ export class DatabaseService {
     ));
 
     this.clearCacheByPattern('posts');
+    this.clearCacheByPattern('Stats');
   }
 
   async batchUpdatePostSourceDomain(updates: Array<{
@@ -667,6 +686,7 @@ export class DatabaseService {
     await this.db.batch(statements);
 
     this.clearCacheByPattern('posts');
+    this.clearCacheByPattern('Stats');
   }
 
   // 关键词订阅相关操作
@@ -691,6 +711,7 @@ export class DatabaseService {
     // 清理相关缓存
     this.clearCacheByPattern('KeywordSubs');
     this.clearCacheByPattern('Subscriptions');
+    this.clearCacheByPattern('Stats');
 
     return result as unknown as KeywordSub;
   }
@@ -716,7 +737,8 @@ export class DatabaseService {
     // 清理相关缓存
     this.clearCacheByPattern('KeywordSubs');
     this.clearCacheByPattern('Subscriptions');
-    
+    this.clearCacheByPattern('Stats');
+
     return result.meta.changes > 0;
   }
 
@@ -762,11 +784,15 @@ export class DatabaseService {
     values.push(id);
 
     const result = await this.db.prepare(`
-      UPDATE keywords_sub 
+      UPDATE keywords_sub
       SET ${updates.join(', ')}
       WHERE id = ?
       RETURNING *
     `).bind(...values).first();
+
+    this.clearCacheByPattern('KeywordSubs');
+    this.clearCacheByPattern('Subscriptions');
+    this.clearCacheByPattern('Stats');
 
     return result as KeywordSub | null;
   }
@@ -829,6 +855,21 @@ export class DatabaseService {
     return count;
   }
 
+  async getSubscriptionsCountByForum(forum: ForumKey): Promise<number> {
+    await this.ensureKeywordSubTableSchema();
+    const cacheKey = this.getForumCacheKey('getSubscriptionsCount', forum);
+    const cached = this.getFromCache<number>(cacheKey);
+    if (cached !== null) return cached;
+
+    const result = await this.db.prepare(`
+      SELECT COUNT(*) as count FROM keywords_sub
+      WHERE forum = ? OR forum = 'all'
+    `).bind(forum).first();
+    const count = (result as any)?.count || 0;
+    this.setCache(cacheKey, count, 60000);
+    return count;
+  }
+
   async getTodayPostsCount(): Promise<number> {
     const cacheKey = this.getCacheKey('getTodayPostsCount', []);
     const cached = this.getFromCache<number>(cacheKey);
@@ -839,6 +880,52 @@ export class DatabaseService {
     `).first();
     const count = (result as any)?.count || 0;
     this.setCache(cacheKey, count, 60000); // 1分钟缓存
+    return count;
+  }
+
+  async getPostsCountByForum(forum: ForumKey): Promise<number> {
+    const cacheKey = this.getForumCacheKey('getPostsCount', forum);
+    const cached = this.getFromCache<number>(cacheKey);
+    if (cached !== null) return cached;
+
+    const result = await this.db.prepare(`
+      SELECT COUNT(*) as count FROM posts
+      WHERE created_at >= datetime('now', '-24 hours')
+        AND source_domain = ?
+    `).bind(this.getForumDomain(forum)).first();
+    const count = (result as any)?.count || 0;
+    this.setCache(cacheKey, count, 30000);
+    return count;
+  }
+
+  async getTodayPostsCountByForum(forum: ForumKey): Promise<number> {
+    const cacheKey = this.getForumCacheKey('getTodayPostsCount', forum);
+    const cached = this.getFromCache<number>(cacheKey);
+    if (cached !== null) return cached;
+
+    const result = await this.db.prepare(`
+      SELECT COUNT(*) as count FROM posts
+      WHERE created_at >= datetime('now', '-24 hours')
+        AND source_domain = ?
+    `).bind(this.getForumDomain(forum)).first();
+    const count = (result as any)?.count || 0;
+    this.setCache(cacheKey, count, 60000);
+    return count;
+  }
+
+  async getTodayMessagesCountByForum(forum: ForumKey): Promise<number> {
+    const cacheKey = this.getForumCacheKey('getTodayMessagesCount', forum);
+    const cached = this.getFromCache<number>(cacheKey);
+    if (cached !== null) return cached;
+
+    const result = await this.db.prepare(`
+      SELECT COUNT(*) as count FROM posts
+      WHERE push_status = 1
+        AND push_date >= datetime('now', '-24 hours')
+        AND source_domain = ?
+    `).bind(this.getForumDomain(forum)).first();
+    const count = (result as any)?.count || 0;
+    this.setCache(cacheKey, count, 60000);
     return count;
   }
 
@@ -885,6 +972,12 @@ export class DatabaseService {
     today_posts: number;
     today_messages: number;
     last_update: string | null;
+    forums: Record<ForumKey, {
+      subscriptions: number;
+      total_posts: number;
+      today_posts: number;
+      today_messages: number;
+    }>;
   }> {
     try {
       const [
@@ -907,6 +1000,53 @@ export class DatabaseService {
         this.getLastUpdateTime()
       ]);
 
+      const forumResults = await Promise.all(
+        (['nodeseek', 'deepflood'] as ForumKey[]).map(async forum => {
+          const [subscriptions, forumPosts, forumTodayPosts, forumTodayMessages] = await Promise.all([
+            this.getSubscriptionsCountByForum(forum),
+            this.getPostsCountByForum(forum),
+            this.getTodayPostsCountByForum(forum),
+            this.getTodayMessagesCountByForum(forum)
+          ]);
+
+          return {
+            forum,
+            stats: {
+              subscriptions,
+              total_posts: forumPosts,
+              today_posts: forumTodayPosts,
+              today_messages: forumTodayMessages
+            }
+          };
+        })
+      );
+
+      const forumsStats = forumResults.reduce(
+        (acc, { forum, stats }) => {
+          acc[forum] = stats;
+          return acc;
+        },
+        {
+          nodeseek: {
+            subscriptions: 0,
+            total_posts: 0,
+            today_posts: 0,
+            today_messages: 0
+          },
+          deepflood: {
+            subscriptions: 0,
+            total_posts: 0,
+            today_posts: 0,
+            today_messages: 0
+          }
+        } as Record<ForumKey, {
+          subscriptions: number;
+          total_posts: number;
+          today_posts: number;
+          today_messages: number;
+        }>
+      );
+
       return {
         total_posts: totalPosts,
         unpushed_posts: unpushedPosts,
@@ -915,7 +1055,8 @@ export class DatabaseService {
         total_subscriptions: totalSubscriptions,
         today_posts: todayPosts,
         today_messages: todayMessages,
-        last_update: lastUpdate
+        last_update: lastUpdate,
+        forums: forumsStats
       };
     } catch (error) {
       console.error('获取综合统计信息失败:', error);
@@ -927,7 +1068,21 @@ export class DatabaseService {
         total_subscriptions: 0,
         today_posts: 0,
         today_messages: 0,
-        last_update: null
+        last_update: null,
+        forums: {
+          nodeseek: {
+            subscriptions: 0,
+            total_posts: 0,
+            today_posts: 0,
+            today_messages: 0
+          },
+          deepflood: {
+            subscriptions: 0,
+            total_posts: 0,
+            today_posts: 0,
+            today_messages: 0
+          }
+        }
       };
     }
   }
@@ -965,9 +1120,10 @@ export class DatabaseService {
       this.clearCacheByPattern('posts');
       this.clearCacheByPattern('getPostsCount');
       this.clearCacheByPattern('getComprehensiveStats');
-      
+      this.clearCacheByPattern('Stats');
+
       console.log(`成功清理了 ${deletedCount} 条过期的post数据`);
-      
+
       return { deletedCount };
     } catch (error) {
       console.error('清理过期post数据失败:', error);

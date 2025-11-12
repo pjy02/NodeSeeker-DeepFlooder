@@ -188,31 +188,6 @@ function setupForumCategoryControls() {
     }
 }
 
-const CATEGORY_CONFIG = {
-    'ai': { icon: '🤖', label: '人工智能' },
-    'daily': { icon: '📅', label: '日常 / 摸鱼闲聊' },
-    'emotion': { icon: '💞', label: '情感八卦' },
-    'stream': { icon: '🎬', label: '影音图文' },
-    'sports': { icon: '🏅', label: '运动赛事' },
-    'game': { icon: '🎮', label: '游戏同好' },
-    'coupon': { icon: '🎁', label: '羊毛福利' },
-    'promotion': { icon: '📢', label: '推广 / 服务推广' },
-    'financial': { icon: '📈', label: '投资理财' },
-    'device': { icon: '📱', label: '电子设备' },
-    'feedback': { icon: '🛠️', label: '运营反馈' },
-    'inside': { icon: '🔒', label: '内部版块' },
-    'sandbox': { icon: '🏖️', label: '沙盒 / 沙盒测试' },
-    'tech': { icon: '💻', label: '技术' },
-    'info': { icon: 'ℹ️', label: '情报' },
-    'review': { icon: '⭐', label: '测评' },
-    'trade': { icon: '💰', label: '交易' },
-    'carpool': { icon: '🚗', label: '拼车' },
-    'life': { icon: '🏠', label: '生活' },
-    'dev': { icon: '⚡', label: 'Dev' },
-    'photo': { icon: '📷', label: '贴图' },
-    'expose': { icon: '🚨', label: '曝光' }
-};
-
 document.addEventListener('DOMContentLoaded', function() {
     // 检查认证状态
     setupForumCategoryControls();
@@ -1210,25 +1185,53 @@ async function loadStats() {
 // 渲染统计信息
 function renderStats(stats) {
     const container = document.getElementById('statsContent');
-    
-    container.innerHTML = `
-        <div class="stat-card">
-            <h3>活跃订阅数</h3>
-            <div class="number">${stats.total_subscriptions || 0}</div>
-        </div>
-        <div class="stat-card">
-            <h3>24小时文章数</h3>
-            <div class="number">${stats.total_posts || 0}</div>
-        </div>
-        <div class="stat-card">
-            <h3>24小时新增</h3>
-            <div class="number">${stats.today_posts || 0}</div>
-        </div>
-        <div class="stat-card">
-            <h3>24小时推送</h3>
-            <div class="number">${stats.today_messages || 0}</div>
-        </div>
-    `;
+    if (!container) {
+        return;
+    }
+
+    const forums = [
+        { key: 'nodeseek', label: 'NodeSeek' },
+        { key: 'deepflood', label: 'DeepFlood' }
+    ];
+
+    const metrics = [
+        { key: 'subscriptions', label: '活跃订阅数' },
+        { key: 'total_posts', label: '24小时文章数' },
+        { key: 'today_posts', label: '24小时新增' },
+        { key: 'today_messages', label: '24小时推送' }
+    ];
+
+    if (!stats || !stats.forums) {
+        container.innerHTML = `
+            <div class="stats-empty">
+                暂无统计数据
+            </div>
+        `;
+        return;
+    }
+
+    const rows = forums.map(forum => {
+        const forumStats = stats.forums[forum.key] || {};
+        const cards = metrics.map(metric => {
+            const value = forumStats[metric.key] ?? 0;
+
+            return `
+                <div class="stat-card">
+                    <h3>${metric.label}</h3>
+                    <div class="number">${value}</div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="forum-stats-row">
+                <div class="forum-stats-header">${forum.label}</div>
+                <div class="forum-stats-cards">${cards}</div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = rows.join('');
 }
 
 // 刷新 Bot 信息
